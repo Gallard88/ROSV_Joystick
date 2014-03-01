@@ -25,7 +25,7 @@ static int TCP_fd;
 // -----------------------------
 static void ReadSettings(void)
 {
-  JSON_Value *val = json_parse_file("ROSV_Joystick.json");
+  JSON_Value *val = json_parse_file("/etc/ROSV_Joystick.json");
   if ( val == NULL ) {
     syslog(LOG_EMERG, "JSON failed to open");
     exit(-1);
