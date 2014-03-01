@@ -1,0 +1,8 @@
+/var/log/ROSV_Joystick {
+  daily
+  rotate 12
+  compress
+  missingok
+  create 644 root root
+  notifempty
+}
