@@ -11,6 +11,8 @@ using namespace std;
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <syslog.h>
+
 #include "parson.h"
 #include "JoyStick.hpp"
 #include "TCP_Client.hpp"
@@ -25,36 +27,33 @@ static void ReadSettings(void)
 {
   JSON_Value *val = json_parse_file("ROSV_Joystick.json");
   if ( val == NULL ) {
-    printf("JSON failed to open\n");
+    syslog(LOG_EMERG, "JSON failed to open");
     exit(-1);
   }
-  printf("Settings file parsed\n");
   int rv = json_value_get_type(val);
   if ( rv != JSONObject ) {
-    printf("JSON Parse file failed\n");
-//    syslog(LOG_EMERG, "JSON Parse file failed\n");
+    syslog(LOG_EMERG, "JSON parse failed");
     exit( -1);
   }
 
   JSON_Object *settings = json_value_get_object(val);
   if ( settings == NULL ) {
-    printf("Settings == NULL\n");
+    syslog(LOG_EMERG, "JSON settings == NULL");
     exit( -1);
   }
   const char *name = json_object_get_string(settings, "Joystick");
   if ( name == NULL ) {
-    printf("No Joystick selected\n");
+    syslog(LOG_EMERG, "JSON settings: no Joystick");
     exit(-1);
   }
   Joy.Connect(name);
 
   name = json_object_get_string(settings, "Server");
   if ( name == NULL ) {
-    printf("No Server selected\n");
+    syslog(LOG_EMERG, "JSON settings: No server selected");
     exit(-1);
   }
   Server = string(name);
-  printf("Server: %s\n", Server.c_str());
 }
 
 // -----------------------------
@@ -121,7 +120,7 @@ static void Log_ReceivedData(void)
       if ( fp != NULL ) {
         int length = fwrite( buffer, 1, rv, fp);
         if ( length < rv ) {
-          printf("Incomplete write: %d %d\n", length, rv);
+          syslog(LOG_WARNING, "Rx: Incomplete write: %d vs %d", length, rv);
         }
         fclose(fp);
       }
@@ -136,26 +135,28 @@ int main (int argc, char *argv[])
   ReadSettings();
   TCP_fd = -1;
 
+  openlog("ROSV_Joystick", LOG_PID, LOG_USER);
+  syslog(LOG_NOTICE, "ROSV_Joystick online");
+
 // ------------------------------------
   if ( daemon( 1, 0 ) < 0 ) { // keep dir
-    printf("daemonise failed\n");
+    syslog(LOG_EMERG, "daemonise failed");
     return -1;
   }
 
   // run main logic.
-  printf("Main Loop()\n");
   while ( 1 ) {
 
     // Run Joystick.
     Joy.Run();
     if ( !Joy.IsConnected() ) {
-      printf("No joystick\n");
+      syslog(LOG_EMERG, "No Joystick");
       exit(-1);
     }
     if ( TCP_fd < 0 ) {
       TCP_fd = connect((const char *)Server.c_str(), 8090);
       if ( TCP_fd > 0 ) {
-        printf("Connected to server\n");
+        syslog(LOG_NOTICE, "Connected to %s", Server.c_str());
       }
       continue;
     }
@@ -164,7 +165,6 @@ int main (int argc, char *argv[])
       Send_Vector();
     }
     Log_ReceivedData();
-    // check to see if there is any data to be read.
   }
   return 0;
 }

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <syslog.h>
 
 #include "TCP_Client.hpp"
 
@@ -19,10 +20,9 @@ int connect(const char *address, int port)
   char recvBuff[1024];
   struct sockaddr_in serv_addr;
 
-  printf("Connect %s:%d\n", address, port);
   memset(recvBuff, '0',sizeof(recvBuff));
   if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    printf("\n Error : Could not create socket \n");
+    syslog(LOG_CRIT, "Error : Could not create socket ");
     return -1;
   }
 
@@ -32,12 +32,12 @@ int connect(const char *address, int port)
   serv_addr.sin_port = htons(port);
 
   if(inet_pton(AF_INET, address, &serv_addr.sin_addr)<=0) {
-    printf("\n inet_pton error occured\n");
+    syslog(LOG_CRIT, "inet_pton error occured");
     return -1;
   }
 
   if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-    printf("\n Error : Connect Failed \n");
+    syslog(LOG_CRIT, "Error : Connect Failed");
     return -1;
   }
 

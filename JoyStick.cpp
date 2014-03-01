@@ -28,6 +28,7 @@ using namespace std;
 #include <iostream>
 #include <string.h>
 #include <string>
+#include <syslog.h>
 
 #include "JoyStick.hpp"
 /* ======================== */
@@ -67,7 +68,7 @@ void JoyStickDriver::OpenPort(void)
   if ( !IsConnected()) {
 
     if( ( file_fd = open( DeviceName.c_str() , O_RDONLY)) < 0 ) {
-      printf( "Couldn't open joystick\n" );
+      syslog(LOG_WARNING, "Couldn't open joystick\n" );
       return;
     }
     ioctl( file_fd, JSIOCGNAME(80), &joy_name );
@@ -81,8 +82,8 @@ void JoyStickDriver::OpenPort(void)
     memset( axis, 0, sizeof(int) * numAxis);
     memset( buttons, 0, sizeof(int) * numButtons);
 
-    printf("Joystick detected: %s\n", joy_name);
-    printf("Axis: %d, Buttons: %d\n", numAxis, numButtons);
+    syslog(LOG_INFO, "Joystick detected: %s\n", joy_name);
+    syslog(LOG_INFO, "Axis: %d, Buttons: %d\n", numAxis, numButtons);
   }
 }
 
