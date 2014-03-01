@@ -42,20 +42,4 @@ int connect(const char *address, int port)
   }
 
   return sockfd;
-  /*
-      while ( (n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0)
-      {
-          recvBuff[n] = 0;
-          if(fputs(recvBuff, stdout) == EOF)
-          {
-              printf("\n Error : Fputs error\n");
-          }
-      }
-
-      if(n < 0)
-      {
-          printf("\n Read error \n");
-      }
-      return 0;
-  */
 }

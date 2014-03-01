@@ -6,6 +6,10 @@ using namespace std;
 #include <unistd.h>
 
 #include <string>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "parson.h"
 #include "JoyStick.hpp"
@@ -91,6 +95,41 @@ void Send_Vector(void)
 }
 
 // -----------------------------
+static void Log_ReceivedData(void)
+{
+  fd_set readFD;
+  struct timeval timeout;
+  char buffer[4096];
+  int rv;
+
+  timeout.tv_sec = 0;
+  timeout.tv_usec = 100;
+
+  FD_ZERO(&readFD);
+  FD_SET(TCP_fd, &readFD);
+
+  if ( select(TCP_fd+1, &readFD, NULL, NULL, &timeout) > 0 ) {
+    if ( FD_ISSET(TCP_fd, &readFD) ) {
+      rv = read(TCP_fd, buffer, sizeof(buffer));
+      if ( rv < 0 ) {
+        close(TCP_fd);
+        TCP_fd = -1;
+        return;
+      }
+      buffer[rv] = 0;	// terminate buffer
+      FILE *fp = fopen("/var/log/ROSV_Joystick", "a+");
+      if ( fp != NULL ) {
+        int length = fwrite( buffer, 1, rv, fp);
+        if ( length < rv ) {
+          printf("Incomplete write: %d %d\n", length, rv);
+        }
+        fclose(fp);
+      }
+    }
+  }
+}
+
+// -----------------------------
 int main (int argc, char *argv[])
 {
   // open settings file and read data.
@@ -98,12 +137,11 @@ int main (int argc, char *argv[])
   TCP_fd = -1;
 
 // ------------------------------------
-  
-    if ( daemon( 1, 0 ) < 0 ) { // keep dir
-      printf("daemonise failed\n");
-      return -1;
-    }
- 
+  if ( daemon( 1, 0 ) < 0 ) { // keep dir
+    printf("daemonise failed\n");
+    return -1;
+  }
+
   // run main logic.
   printf("Main Loop()\n");
   while ( 1 ) {
@@ -117,7 +155,7 @@ int main (int argc, char *argv[])
     if ( TCP_fd < 0 ) {
       TCP_fd = connect((const char *)Server.c_str(), 8090);
       if ( TCP_fd > 0 ) {
-	printf("Connected to server\n");
+        printf("Connected to server\n");
       }
       continue;
     }
@@ -125,6 +163,8 @@ int main (int argc, char *argv[])
     if ( Joy.NewData()) {
       Send_Vector();
     }
+    Log_ReceivedData();
+    // check to see if there is any data to be read.
   }
   return 0;
 }
