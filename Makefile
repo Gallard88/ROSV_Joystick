@@ -26,15 +26,14 @@ install:
 	install ROSV_Joystick.json /etc
 	touch /var/log/ROSV_Joystick	
 	install ROSV_Joystick /usr/local/bin
-#	install ROSV_Joystick.sh /etc/init.d
-#	update-rc.d ROSV_Joystick.sh defaults 98 02
+	install ROSV_Joystick.sh /etc/init.d
+	update-rc.d ROSV_Joystick.sh defaults 98 02
 	
 uninstall: 
 	rm /usr/local/bin/ROSV_Joystick
 	rm /etc/ROSV_Joystick.json
-#	update-rc.d -f TFTP_Server.sh remove
-#	rm /usr/local/bin/TFTP_Server 
-#	rm /etc/init.d/TFTP_Server.sh
+	update-rc.d -f ROSV_Joystick.sh remove
+	rm /etc/init.d/ROSV_Joystick.sh
 
 clean:
 	rm -rf *o *~ ROSV_Joystick
