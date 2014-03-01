@@ -68,7 +68,6 @@ void JoyStickDriver::OpenPort(void)
   if ( !IsConnected()) {
 
     if( ( file_fd = open( DeviceName.c_str() , O_RDONLY)) < 0 ) {
-      syslog(LOG_WARNING, "Couldn't open joystick\n" );
       return;
     }
     ioctl( file_fd, JSIOCGNAME(80), &joy_name );

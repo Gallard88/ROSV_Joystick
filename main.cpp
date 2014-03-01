@@ -131,6 +131,7 @@ static void Log_ReceivedData(void)
 // -----------------------------
 int main (int argc, char *argv[])
 {
+
   // open settings file and read data.
   ReadSettings();
   TCP_fd = -1;
@@ -143,6 +144,10 @@ int main (int argc, char *argv[])
     syslog(LOG_EMERG, "daemonise failed");
     return -1;
   }
+  Joy.Run();
+  if ( !Joy.IsConnected() ) {
+    syslog(LOG_ALERT, "No joystick found attached on startup");
+  }
 
   // run main logic.
   while ( 1 ) {
@@ -150,8 +155,8 @@ int main (int argc, char *argv[])
     // Run Joystick.
     Joy.Run();
     if ( !Joy.IsConnected() ) {
-      syslog(LOG_EMERG, "No Joystick");
-      exit(-1);
+      sleep(10);
+      continue;
     }
     if ( TCP_fd < 0 ) {
       TCP_fd = connect((const char *)Server.c_str(), 8090);
