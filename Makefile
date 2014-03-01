@@ -28,12 +28,14 @@ install:
 	install ROSV_Joystick /usr/local/bin
 	install ROSV_Joystick.sh /etc/init.d
 	update-rc.d ROSV_Joystick.sh defaults 98 02
+	cp ROSV_Logrotate /etc/logrotate.d
 	
 uninstall: 
 	rm /usr/local/bin/ROSV_Joystick
 	rm /etc/ROSV_Joystick.json
 	update-rc.d -f ROSV_Joystick.sh remove
 	rm /etc/init.d/ROSV_Joystick.sh
+	rm /etc/logrotate.d/ROSV_Logrotate
 
 clean:
 	rm -rf *o *~ ROSV_Joystick
