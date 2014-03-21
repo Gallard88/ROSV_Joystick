@@ -8,6 +8,7 @@ using namespace std;
 #include <string>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -129,6 +130,26 @@ static void Log_ReceivedData(void)
 }
 
 // -----------------------------
+int Send_Packet(void)
+{
+  static struct timeval last;
+  struct timeval current;
+  long long mtime, seconds, useconds;
+
+  gettimeofday(&current, NULL);
+  seconds  = current.tv_sec  - last.tv_sec;
+  useconds = current.tv_usec - last.tv_usec;
+
+  mtime = ((seconds) * 1000 + useconds/1000.0) + 0.5;
+  if ( mtime > 2000 ) {
+    last = current;
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+// -----------------------------
 int main (int argc, char *argv[])
 {
 
@@ -155,18 +176,20 @@ int main (int argc, char *argv[])
     // Run Joystick.
     Joy.Run();
     if ( !Joy.IsConnected() ) {
-      sleep(10);
+      sleep(30);
       continue;
     }
     if ( TCP_fd < 0 ) {
       TCP_fd = connect((const char *)Server.c_str(), 8090);
-      if ( TCP_fd > 0 ) {
+      if ( TCP_fd >= 0 ) {
         syslog(LOG_NOTICE, "Connected to %s", Server.c_str());
+      } else {
+        sleep(30);
+        continue;
       }
-      continue;
     }
 
-    if ( Joy.NewData()) {
+    if ( Joy.NewData() || Send_Packet()) {
       Send_Vector();
     }
     Log_ReceivedData();

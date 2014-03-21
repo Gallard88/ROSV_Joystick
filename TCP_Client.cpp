@@ -17,12 +17,10 @@
 int connect(const char *address, int port)
 {
   int sockfd = 0;
-  char recvBuff[1024];
   struct sockaddr_in serv_addr;
 
-  memset(recvBuff, '0',sizeof(recvBuff));
   if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    syslog(LOG_CRIT, "Error : Could not create socket ");
+    syslog(LOG_CRIT, "Error : Could not create socket: %s:%d", address, port);
     return -1;
   }
 
