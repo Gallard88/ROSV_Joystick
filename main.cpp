@@ -19,7 +19,7 @@ using namespace std;
 #include "TCP_Client.hpp"
 
 // -----------------------------
-static JoyStickDriver Joy;
+static JoyStickDriver *Joy;
 static string Server;
 static int TCP_fd;
 
@@ -47,7 +47,7 @@ static void ReadSettings(void)
     syslog(LOG_EMERG, "JSON settings: no Joystick");
     exit(-1);
   }
-  Joy.Connect(name);
+  Joy = new JoyStickDriver(name);
 
   name = json_object_get_string(settings, "Server");
   if ( name == NULL ) {
@@ -65,37 +65,37 @@ static void ReadSettings(void)
  * 	3	Yaw
  */
 // -----------------------------
-void Send_Vector(void)
+const char *VecName[NUM_VECTORS] = {
+  "Forward",
+  "Strafe",
+  "Dive",
+  "Turn"
+};
+
+// -----------------------------
+static int Send_Packet(void)
 {
-  int vector[NUM_VECTORS];
-  char buf[32];
-  string msg;
+  char msg[00];
+  float vector[NUM_VECTORS];
+  int i, rv;
 
-  vector[0] = (Joy.GetAxis(1) * -100) / 32767;
-  vector[1] = (Joy.GetAxis(0) * 100) / 32767;
-  vector[2] = ((Joy.GetAxis(3) * -1) + 32767) / 655;
-  vector[3] = (Joy.GetAxis(2) * 100) / 32767;
+  vector[0] = (Joy->GetAxis(1) * -100) / 32767;
+  vector[1] = (Joy->GetAxis(0) * 100) / 32767;
+  vector[2] = ((Joy->GetAxis(3) * -1) + 32767) / 655;
+  vector[3] = (Joy->GetAxis(2) * 100) / 32767;
 
-  msg = "{ \"Module\":\"Motor\", ";
-  msg += " \"RecordType\":\"Velocity\", ";
-  msg += "\"Vector\": [";
-  for ( int i = 0; i < NUM_VECTORS; i ++ ) {
-    sprintf(buf, " %d", vector[i]);
-    msg += string(buf);
-    if ( i != (NUM_VECTORS-1) ) {
-      msg += ",";
+  for ( i = 0; i < NUM_VECTORS; i ++ ) {
+    sprintf(msg,"{ \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)vector[i]);
+    rv = write(TCP_fd, msg, strlen(msg));
+    if ( rv < 0 ) {
+      return -1;
     }
   }
-  msg += "]}\r\n";
-  int rv = write(TCP_fd, msg.c_str(), msg.length());
-  if ( rv < 0 ) {
-    close(TCP_fd);
-    TCP_fd = -1;
-  }
+  return 0;
 }
 
 // -----------------------------
-static void Log_ReceivedData(void)
+static void ReadData(void)
 {
   fd_set readFD;
   struct timeval timeout;
@@ -103,10 +103,12 @@ static void Log_ReceivedData(void)
   int rv;
 
   timeout.tv_sec = 0;
-  timeout.tv_usec = 100;
+  timeout.tv_usec = 100000;
 
   FD_ZERO(&readFD);
+
   FD_SET(TCP_fd, &readFD);
+  FD_SET(Joy->GetFileDescript(), &readFD);
 
   if ( select(TCP_fd+1, &readFD, NULL, NULL, &timeout) > 0 ) {
     if ( FD_ISSET(TCP_fd, &readFD) ) {
@@ -114,38 +116,18 @@ static void Log_ReceivedData(void)
       if ( rv < 0 ) {
         close(TCP_fd);
         TCP_fd = -1;
-        return;
-      }
-      buffer[rv] = 0;	// terminate buffer
-      FILE *fp = fopen("/var/log/ROSV_Joystick", "a+");
-      if ( fp != NULL ) {
-        int length = fwrite( buffer, 1, rv, fp);
-        if ( length < rv ) {
-          syslog(LOG_WARNING, "Rx: Incomplete write: %d vs %d", length, rv);
+      } else {
+        buffer[rv] = 0; // terminate buffer
+        FILE *fp = fopen("/var/log/ROSV_Joystick", "a+");
+        if ( fp != NULL ) {
+          fwrite( buffer, 1, rv, fp);
+          fclose(fp);
         }
-        fclose(fp);
       }
     }
-  }
-}
-
-// -----------------------------
-int Send_Packet(void)
-{
-  static struct timeval last;
-  struct timeval current;
-  long long mtime, seconds, useconds;
-
-  gettimeofday(&current, NULL);
-  seconds  = current.tv_sec  - last.tv_sec;
-  useconds = current.tv_usec - last.tv_usec;
-
-  mtime = ((seconds) * 1000 + useconds/1000.0) + 0.5;
-  if ( mtime > 2000 ) {
-    last = current;
-    return 1;
-  } else {
-    return 0;
+    if ( FD_ISSET(Joy->GetFileDescript(), &readFD) ) {
+      Joy->Run();
+    }
   }
 }
 
@@ -160,39 +142,49 @@ int main (int argc, char *argv[])
   openlog("ROSV_Joystick", LOG_PID, LOG_USER);
   syslog(LOG_NOTICE, "ROSV_Joystick online");
 
-// ------------------------------------
+  // ------------------------------------
   if ( daemon( 1, 0 ) < 0 ) { // keep dir
     syslog(LOG_EMERG, "daemonise failed");
     return -1;
-  }
-  Joy.Run();
-  if ( !Joy.IsConnected() ) {
-    syslog(LOG_ALERT, "No joystick found attached on startup");
   }
 
   // run main logic.
   while ( 1 ) {
 
-    // Run Joystick.
-    Joy.Run();
-    if ( !Joy.IsConnected() ) {
-      sleep(30);
-      continue;
-    }
+    // If NOT TCP
+    // Try to connect
     if ( TCP_fd < 0 ) {
       TCP_fd = connect((const char *)Server.c_str(), 8090);
       if ( TCP_fd >= 0 ) {
         syslog(LOG_NOTICE, "Connected to %s", Server.c_str());
-      } else {
-        sleep(30);
-        continue;
       }
     }
 
-    if ( Joy.NewData() || Send_Packet()) {
-      Send_Vector();
+    // If not joystick
+    // Try to connect.
+    while (( Joy->GetFileDescript() >= 0 ) &&
+           ( TCP_fd >= 0 )) {
+
+      // read data from both.
+      ReadData();
+
+      // Read Data
+      // Update Model
+      // Send new data
+      if ( Send_Packet() < 0 ) {
+        break;
+      }
     }
-    Log_ReceivedData();
+
+    // if we get here we have either lost the joystick OR
+    // We can no longer talk to the ROSV.
+    // Best option is to close the ROSV socket, and go back to polling.
+    if ( TCP_fd >= 0 ) {
+      syslog(LOG_NOTICE, "ROSV Connection lost");
+      close(TCP_fd);
+      TCP_fd = -1;
+    }
+    sleep (120);
   }
   return 0;
 }

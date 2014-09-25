@@ -5,10 +5,9 @@
 #define __JOYSTICK_HPP__
 /* ======================== */
 
-#include <string>
-
 class JoyStickDriver {
 private:
+  char *Device;
   char joy_name[256];
   int num_Axis;
   int file_fd;
@@ -19,28 +18,22 @@ private:
   int *axis;
   int numAxis;
 
-  void OpenPort(void);
   void ClosePort(void);
-  bool Data_Ready;
-
 
 public:
-  JoyStickDriver();
+  JoyStickDriver(const char *device);
   ~JoyStickDriver();
 
-  void Connect(const char *device);
-  int IsConnected(void);
+  int Connect(void);
+  int GetFileDescript(void) { return file_fd; }
 
   void Run(void);
-  bool NewData(void);
 
   int GetNumAxis(void);
   int GetAxis(int axis_num);
 
   int GetNumButton(void);
   int GetButton(int button_num);
-
-  string DeviceName;
 };
 
 /* ======================== */

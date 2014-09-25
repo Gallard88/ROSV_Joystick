@@ -24,10 +24,7 @@ using namespace std;
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/joystick.h>
-#include <string>
-#include <iostream>
 #include <string.h>
-#include <string>
 #include <syslog.h>
 
 #include "JoyStick.hpp"
@@ -36,77 +33,56 @@ using namespace std;
 #define NUM_BUT		10
 
 /* ======================== */
-JoyStickDriver::JoyStickDriver()
+JoyStickDriver::JoyStickDriver(const char *device)
 {
   file_fd = -1;
+  Device = new char((strlen(device)));
+  strcpy(Device, device);
+  Connect();
 }
 
 /* ======================== */
 JoyStickDriver::~JoyStickDriver()
 {
+  ClosePort();
+}
+
+void JoyStickDriver::ClosePort(void)
+{
   delete [] axis;
   delete [] buttons;
+  numButtons = -1;
+  numAxis = -1;
 
-  close(file_fd);
-}
-
-/* ======================== */
-void JoyStickDriver::Connect(const char *device)
-{
-  DeviceName = string(device);
-}
-
-/* ======================== */
-int JoyStickDriver::IsConnected(void)
-{
-  return ( file_fd >= 0) ? 1: 0;
-}
-
-/* ======================== */
-void JoyStickDriver::OpenPort(void)
-{
-  if ( !IsConnected()) {
-
-    if( ( file_fd = open( DeviceName.c_str() , O_RDONLY)) < 0 ) {
-      return;
-    }
-    ioctl( file_fd, JSIOCGNAME(80), &joy_name );
-
-    ioctl( file_fd, JSIOCGAXES,    &numAxis );
-    ioctl( file_fd, JSIOCGBUTTONS, &numButtons );
-
-    axis = new int [numAxis];
-    buttons = new int [numButtons];
-
-    memset( axis, 0, sizeof(int) * numAxis);
-    memset( buttons, 0, sizeof(int) * numButtons);
-
-    syslog(LOG_INFO, "Joystick detected: %s\n", joy_name);
-    syslog(LOG_INFO, "Axis: %d, Buttons: %d\n", numAxis, numButtons);
+  if ( file_fd >= 0 ) {
+    close(file_fd);
+    file_fd = -1;
   }
 }
 
 /* ======================== */
-void JoyStickDriver::ClosePort(void)
+int  JoyStickDriver::Connect(void)
 {
-  delete axis;
-  delete buttons;
-  numButtons = 0;
-  numAxis = 0;
-  close(file_fd);
-  file_fd = -1;
+  if ( file_fd < 0 ) {
+    file_fd = open( Device , O_RDONLY);
+    if ( file_fd >= 0 ) {
+      ioctl( file_fd, JSIOCGNAME(80), &joy_name );
+
+      ioctl( file_fd, JSIOCGAXES,    &numAxis );
+      ioctl( file_fd, JSIOCGBUTTONS, &numButtons );
+
+      axis = new int [numAxis];
+      buttons = new int [numButtons];
+
+      memset( axis, 0, sizeof(int) * numAxis);
+      memset( buttons, 0, sizeof(int) * numButtons);
+
+      syslog(LOG_INFO, "Joystick detected: %s\n", joy_name);
+      syslog(LOG_INFO, "Axis: %d, Buttons: %d\n", numAxis, numButtons);
+    }
+  }
+  return GetFileDescript();
 }
-
-/* ======================== */
-bool JoyStickDriver::NewData(void)
-{
-  bool rv;
-
-  rv = Data_Ready;
-  Data_Ready = false;
-  return rv;
-}
-
 
 /* ======================== */
 void JoyStickDriver::Run(void)
@@ -114,45 +90,27 @@ void JoyStickDriver::Run(void)
   struct js_event js;
   int rv;
 
-  if ( file_fd < 0 ) {
-    OpenPort();
+  if ( Connect() < 0 ) {
+    return;
+  }
+  rv = read(file_fd, &js, sizeof(struct js_event));
+  if ( rv < 0 ) {
+    ClosePort();
     return;
   }
 
-  fd_set readFD;
-  struct timeval timeout;
-
-  timeout.tv_sec = 0;
-  timeout.tv_usec = 100000;
-
-  FD_ZERO(&readFD);
-  FD_SET(file_fd, &readFD);
-
-  if ( select(file_fd+1, &readFD, NULL, NULL, &timeout) > 0 ) {
-    if ( FD_ISSET(file_fd, &readFD) ) {
-      rv = read(file_fd, &js, sizeof(struct js_event));
-      if ( rv < 0 ) {
-        ClosePort();
-        return;
+  switch (js.type & ~JS_EVENT_INIT) {
+    case JS_EVENT_AXIS:
+      if ( js.number < numAxis ) {
+        axis[ js.number ] = js.value;
       }
+      break;
 
-
-      switch (js.type & ~JS_EVENT_INIT) {
-      case JS_EVENT_AXIS:
-        if ( js.number < numAxis ) {
-          Data_Ready = true;
-          axis[ js.number ] = js.value;
-        }
-        break;
-
-      case JS_EVENT_BUTTON:
-        if ( js.number < numButtons ) {
-          Data_Ready = true;
-          buttons [ js.number ] = js.value;
-        }
-        break;
+    case JS_EVENT_BUTTON:
+      if ( js.number < numButtons ) {
+        buttons [ js.number ] = js.value;
       }
-    }
+      break;
   }
 }
 
