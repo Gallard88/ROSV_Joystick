@@ -16,12 +16,11 @@ using namespace std;
 
 #include "parson.h"
 #include "JoyStick.hpp"
-#include "TCP_Client.hpp"
+#include "ControlModel.h"
 
 // -----------------------------
 static JoyStickDriver *Joy;
-static string Server;
-static int TCP_fd;
+static ControlMode *Control;
 
 // -----------------------------
 static void ReadSettings(void)
@@ -54,44 +53,17 @@ static void ReadSettings(void)
     syslog(LOG_EMERG, "JSON settings: No server selected");
     exit(-1);
   }
-  Server = string(name);
+  Control = new ControlMode(name, 8090);
 }
 
 // -----------------------------
-#define NUM_VECTORS	4
-/* 	0	Forward
- * 	1	Side
- * 	2	Depth
- * 	3	Yaw
- */
-// -----------------------------
-const char *VecName[NUM_VECTORS] = {
-  "Forward",
-  "Strafe",
-  "Dive",
-  "Turn"
-};
-
-// -----------------------------
-static int Send_Packet(void)
+static void Send_Packet(void)
 {
-  char msg[00];
-  float vector[NUM_VECTORS];
-  int i, rv;
-
-  vector[0] = (Joy->GetAxis(1) * -100) / 32767;
-  vector[1] = (Joy->GetAxis(0) * 100) / 32767;
-  vector[2] = ((Joy->GetAxis(3) * -1) + 32767) / 655;
-  vector[3] = (Joy->GetAxis(2) * 100) / 32767;
-
-  for ( i = 0; i < NUM_VECTORS; i ++ ) {
-    sprintf(msg,"{ \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)vector[i]);
-    rv = write(TCP_fd, msg, strlen(msg));
-    if ( rv < 0 ) {
-      return -1;
-    }
-  }
-  return 0;
+  Control->SetVectorRaw(VEC_FORWARD, ((float)Joy->GetAxis(1) * -100) / 32767);
+  Control->SetVectorRaw(VEC_STRAFE, (Joy->GetAxis(0) * 100) / 32767);
+  Control->SetVectorRaw(VEC_DEPTH, ((Joy->GetAxis(3) * -1) + 32767) / 655);
+  Control->SetVectorRaw(VEC_TURN, (Joy->GetAxis(2) * 100) / 32767);
+  Control->Send();
 }
 
 // -----------------------------
@@ -99,31 +71,20 @@ static void ReadData(void)
 {
   fd_set readFD;
   struct timeval timeout;
-  char buffer[4096];
-  int rv;
 
   timeout.tv_sec = 0;
   timeout.tv_usec = 100000;
 
   FD_ZERO(&readFD);
 
-  FD_SET(TCP_fd, &readFD);
+  FD_SET(Control->GetFD(), &readFD);
   FD_SET(Joy->GetFileDescript(), &readFD);
+  int max = (Control->GetFD() > Joy->GetFileDescript())? Control->GetFD(): Joy->GetFileDescript();
 
-  if ( select(TCP_fd+1, &readFD, NULL, NULL, &timeout) > 0 ) {
-    if ( FD_ISSET(TCP_fd, &readFD) ) {
-      rv = read(TCP_fd, buffer, sizeof(buffer));
-      if ( rv < 0 ) {
-        close(TCP_fd);
-        TCP_fd = -1;
-      } else {
-        buffer[rv] = 0; // terminate buffer
-        FILE *fp = fopen("/var/log/ROSV_Joystick", "a+");
-        if ( fp != NULL ) {
-          fwrite( buffer, 1, rv, fp);
-          fclose(fp);
-        }
-      }
+
+  if ( select(max+1, &readFD, NULL, NULL, &timeout) > 0 ) {
+    if ( FD_ISSET(Control->GetFD(), &readFD) ) {
+      Control->Run();
     }
     if ( FD_ISSET(Joy->GetFileDescript(), &readFD) ) {
       Joy->Run();
@@ -137,7 +98,6 @@ int main (int argc, char *argv[])
 
   // open settings file and read data.
   ReadSettings();
-  TCP_fd = -1;
 
   openlog("ROSV_Joystick", LOG_PID, LOG_USER);
   syslog(LOG_NOTICE, "ROSV_Joystick online");
@@ -153,17 +113,14 @@ int main (int argc, char *argv[])
 
     // If NOT TCP
     // Try to connect
-    if ( TCP_fd < 0 ) {
-      TCP_fd = connect((const char *)Server.c_str(), 8090);
-      if ( TCP_fd >= 0 ) {
-        syslog(LOG_NOTICE, "Connected to %s", Server.c_str());
-      }
+    if ( Control->GetFD() < 0 ) {
+      Control->Connect();
     }
 
     // If not joystick
     // Try to connect.
     while (( Joy->GetFileDescript() >= 0 ) &&
-           ( TCP_fd >= 0 )) {
+           ( Control->GetFD() >= 0 )) {
 
       // read data from both.
       ReadData();
@@ -171,18 +128,15 @@ int main (int argc, char *argv[])
       // Read Data
       // Update Model
       // Send new data
-      if ( Send_Packet() < 0 ) {
-        break;
-      }
+      Send_Packet();
     }
 
     // if we get here we have either lost the joystick OR
     // We can no longer talk to the ROSV.
     // Best option is to close the ROSV socket, and go back to polling.
-    if ( TCP_fd >= 0 ) {
+    if ( Control->GetFD() >= 0 ) {
       syslog(LOG_NOTICE, "ROSV Connection lost");
-      close(TCP_fd);
-      TCP_fd = -1;
+      Control->Disconnect();
     }
     sleep (120);
   }
