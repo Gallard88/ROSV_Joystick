@@ -31,10 +31,8 @@ ControlMode::ControlMode(const char *server, int port)
 {
   RosvFd = -1;
   memset(VectorRaw, 0, sizeof(VectorRaw));
-  Server = new char[strlen("192.168.1.15")+1];
-  strcpy(Server, "192.168.1.15");
-//  Server = new char[strlen(server)];
-//  strcpy(Server, server);
+  Server = new char[strlen(server)];
+  strcpy(Server, server);
   Port = port;
 }
 
@@ -51,6 +49,7 @@ void ControlMode::Connect(void)
     RosvFd = connect((const char *)Server, Port);
     if ( RosvFd >= 0 ) {
       syslog(LOG_NOTICE, "Connected to %s", Server);
+      SendClientId();
     }
   }
 }
@@ -91,7 +90,21 @@ void ControlMode::Run(void)
   }
 }
 
-void ControlMode::Send(void)
+// ====================================================
+void ControlMode::SendClientId(void)
+{
+  char msg[256];
+
+  strcpy(msg,"{ \"Packet\":\"ClientId\", \"ProtVer\":\"0.1\", \"Name\":\"ROSV_Joystick\" }\r\n");
+  int rv = write(RosvFd, msg, strlen(msg));
+  if ( rv < 0 ) {
+    Disconnect();
+    return;
+  }
+}
+
+// ====================================================
+void ControlMode::SendVectorUpdate(void)
 {
   int i, rv;
   char msg[256];
@@ -99,7 +112,7 @@ void ControlMode::Send(void)
    return;
   }
   for ( i = 0; i < NUM_VECTORS; i ++ ) {
-    sprintf(msg,"{ \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)VectorRaw[i]);
+    sprintf(msg,"{ \"Packet\":\"SetVector\", \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)VectorRaw[i]);
     rv = write(RosvFd, msg, strlen(msg));
     if ( rv < 0 ) {
       Disconnect();
@@ -108,3 +121,5 @@ void ControlMode::Send(void)
   }
 }
 
+// ====================================================
+// ====================================================

@@ -23,7 +23,7 @@ public:
 //  void DecDepthPrec(void);
 
   void Run(void);
-  void Send(void);
+  void SendVectorUpdate(void);
   int GetFD(void) { return RosvFd; }
 
 private:
@@ -32,6 +32,7 @@ private:
   char *Server;
   int Port;
 
+  void SendClientId(void);
 
 };
 

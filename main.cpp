@@ -63,7 +63,7 @@ static void Send_Packet(void)
   Control->SetVectorRaw(VEC_STRAFE, (Joy->GetAxis(0) * 100) / 32767);
   Control->SetVectorRaw(VEC_DEPTH, ((Joy->GetAxis(3) * -1) + 32767) / 655);
   Control->SetVectorRaw(VEC_TURN, (Joy->GetAxis(2) * 100) / 32767);
-  Control->Send();
+  Control->SendVectorUpdate();
 }
 
 // -----------------------------
