@@ -112,7 +112,7 @@ void ControlMode::SendVectorUpdate(void)
    return;
   }
   for ( i = 0; i < NUM_VECTORS; i ++ ) {
-    sprintf(msg,"{ \"Packet\":\"SetVector\", \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)VectorRaw[i]);
+    sprintf(msg,"{ \"Module\":\"Navigation\", \"Packet\":\"SetVector\", \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)VectorRaw[i]);
     rv = write(RosvFd, msg, strlen(msg));
     if ( rv < 0 ) {
       Disconnect();
