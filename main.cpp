@@ -19,6 +19,9 @@ using namespace std;
 #include "ControlModel.h"
 
 // -----------------------------
+#define UPDATE_RATE_HZ(x)	(1000000 / x)
+
+// -----------------------------
 static JoyStickDriver *Joy;
 static ControlMode *Control;
 
@@ -73,7 +76,7 @@ static void ReadData(void)
   struct timeval timeout;
 
   timeout.tv_sec = 0;
-  timeout.tv_usec = 100000;
+  timeout.tv_usec = UPDATE_RATE_HZ(50);
 
   FD_ZERO(&readFD);
 
