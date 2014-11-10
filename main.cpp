@@ -51,6 +51,12 @@ static void ReadSettings(void)
   }
   Joy = new JoyStickDriver(name);
 
+  int deadzone = (int) json_object_get_number(settings, "Deadzone");
+  if ( name == NULL ) {
+    deadzone = 5;
+  }
+  Joy->SetDeadzone(deadzone);
+
   name = json_object_get_string(settings, "Server");
   if ( name == NULL ) {
     syslog(LOG_EMERG, "JSON settings: No server selected");

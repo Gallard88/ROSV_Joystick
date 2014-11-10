@@ -18,6 +18,8 @@ private:
   int *axis;
   int numAxis;
 
+  int DeadZone;
+
   void ClosePort(void);
 
 public:
@@ -28,6 +30,7 @@ public:
   int GetFileDescript(void) { return file_fd; }
 
   void Run(void);
+  void SetDeadzone(int value);
 
   int GetNumAxis(void);
   int GetAxis(int axis_num);

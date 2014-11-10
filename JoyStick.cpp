@@ -19,12 +19,14 @@ Radio_Driver is free software: you can redistribute it and/or modify it
  */
 using namespace std;
 
-#include <stdio.h>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/joystick.h>
-#include <string.h>
 #include <syslog.h>
 
 #include "JoyStick.hpp"
@@ -35,6 +37,7 @@ using namespace std;
 /* ======================== */
 JoyStickDriver::JoyStickDriver(const char *device)
 {
+  DeadZone = 10;
   file_fd = -1;
   Device = new char((strlen(device)));
   strcpy(Device, device);
@@ -101,6 +104,9 @@ void JoyStickDriver::Run(void)
 
   switch (js.type & ~JS_EVENT_INIT) {
     case JS_EVENT_AXIS:
+      if ( abs(js.value) < DeadZone ) {
+        js.value = 0;
+      }
       if ( js.number < numAxis ) {
         axis[ js.number ] = js.value;
       }
@@ -143,6 +149,15 @@ int JoyStickDriver::GetButton(int button_num)
 }
 
 /* ======================== */
+void JoyStickDriver::SetDeadzone(int value)
+{
+  if ( value < 0 ) {
+    // positive numbers only!
+    value *= -1;
+  }
+  DeadZone = (37262 * value) / 100;
+}
+
 /* ======================== */
 /* ======================== */
 
