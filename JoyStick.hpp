@@ -27,7 +27,9 @@ public:
   ~JoyStickDriver();
 
   int Connect(void);
-  int GetFileDescript(void) { return file_fd; }
+  int GetFileDescript(void) {
+    return file_fd;
+  }
 
   void Run(void);
   void SetDeadzone(int value);

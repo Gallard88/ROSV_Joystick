@@ -103,20 +103,20 @@ void JoyStickDriver::Run(void)
   }
 
   switch (js.type & ~JS_EVENT_INIT) {
-    case JS_EVENT_AXIS:
-      if ( abs(js.value) < DeadZone ) {
-        js.value = 0;
-      }
-      if ( js.number < numAxis ) {
-        axis[ js.number ] = js.value;
-      }
-      break;
+  case JS_EVENT_AXIS:
+    if ( abs(js.value) < DeadZone ) {
+      js.value = 0;
+    }
+    if ( js.number < numAxis ) {
+      axis[ js.number ] = js.value;
+    }
+    break;
 
-    case JS_EVENT_BUTTON:
-      if ( js.number < numButtons ) {
-        buttons [ js.number ] = js.value;
-      }
-      break;
+  case JS_EVENT_BUTTON:
+    if ( js.number < numButtons ) {
+      buttons [ js.number ] = js.value;
+    }
+    break;
   }
 }
 

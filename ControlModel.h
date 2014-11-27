@@ -24,7 +24,9 @@ public:
 
   void Run(void);
   void SendVectorUpdate(void);
-  int GetFD(void) { return RosvFd; }
+  int GetFD(void) {
+    return RosvFd;
+  }
 
 private:
   int RosvFd;

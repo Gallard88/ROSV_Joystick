@@ -13,10 +13,13 @@ using namespace std;
 #include <fcntl.h>
 
 #include <syslog.h>
+#include <time.h>
 
 #include "parson.h"
 #include "JoyStick.hpp"
 #include "ControlModel.h"
+#include "RTT_Interface.h"
+#include "RealTimeTask.h"
 
 // -----------------------------
 #define UPDATE_RATE_HZ(x)	(1000000 / x)
@@ -52,7 +55,7 @@ static void ReadSettings(void)
   Joy = new JoyStickDriver(name);
 
   int deadzone = (int) json_object_get_number(settings, "Deadzone");
-  if ( name == NULL ) {
+  if ( deadzone <= 0 ) {
     deadzone = 5;
   }
   Joy->SetDeadzone(deadzone);
@@ -66,7 +69,14 @@ static void ReadSettings(void)
 }
 
 // -----------------------------
-static void Send_Packet(void)
+class MainTask: public RTT_Interface {
+
+public:
+  void Run_Task(void);
+
+};
+
+void MainTask::Run_Task(void)
 {
   Control->SetVectorRaw(VEC_FORWARD, ((float)Joy->GetAxis(1) * -100) / 32767);
   Control->SetVectorRaw(VEC_STRAFE, (Joy->GetAxis(0) * 100) / 32767);
@@ -82,14 +92,12 @@ static void ReadData(void)
   struct timeval timeout;
 
   timeout.tv_sec = 0;
-  timeout.tv_usec = UPDATE_RATE_HZ(50);
+  timeout.tv_usec = UPDATE_RATE_HZ(10);
 
   FD_ZERO(&readFD);
-
   FD_SET(Control->GetFD(), &readFD);
   FD_SET(Joy->GetFileDescript(), &readFD);
   int max = (Control->GetFD() > Joy->GetFileDescript())? Control->GetFD(): Joy->GetFileDescript();
-
 
   if ( select(max+1, &readFD, NULL, NULL, &timeout) > 0 ) {
     if ( FD_ISSET(Control->GetFD(), &readFD) ) {
@@ -104,6 +112,8 @@ static void ReadData(void)
 // -----------------------------
 int main (int argc, char *argv[])
 {
+  RealTimeTask *comsTask = new RealTimeTask("Main", new MainTask());
+  comsTask->SetFrequency(5);
 
   // open settings file and read data.
   ReadSettings();
@@ -134,12 +144,12 @@ int main (int argc, char *argv[])
       // read data from both.
       ReadData();
 
-      // Read Data
-      // Update Model
-      // Send new data
-      Send_Packet();
+      // Read Data,  Update Model, Send new data
+      comsTask->Run();
+      if ( comsTask->DetectDeadlineEdge() ) {
+        syslog(LOG_EMERG, "%s Deadline Missed\n", comsTask->GetName().c_str());
+      }
     }
-
     // if we get here we have either lost the joystick OR
     // We can no longer talk to the ROSV.
     // Best option is to close the ROSV socket, and go back to polling.

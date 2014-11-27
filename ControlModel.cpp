@@ -109,7 +109,7 @@ void ControlMode::SendVectorUpdate(void)
   int i, rv;
   char msg[256];
   if( RosvFd < 0 ) {
-   return;
+    return;
   }
   for ( i = 0; i < NUM_VECTORS; i ++ ) {
     sprintf(msg,"{ \"Module\":\"Navigation\", \"Packet\":\"SetVector\", \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)VectorRaw[i]);

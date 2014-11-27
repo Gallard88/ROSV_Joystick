@@ -3,11 +3,14 @@ all: ROSV_Joystick
 FLAGS=-Wall -O2
 CC=g++
 
-ROSV_Joystick: JoyStick.o parson.o main.o TCP_Client.o ControlModel.o
-	$(CC) $(FLAGS) JoyStick.o parson.o ControlModel.o TCP_Client.o main.o -o ROSV_Joystick
+ROSV_Joystick: JoyStick.o parson.o main.o TCP_Client.o ControlModel.o RealTimeTask.o
+	$(CC) $(FLAGS) JoyStick.o parson.o ControlModel.o TCP_Client.o RealTimeTask.o main.o -o ROSV_Joystick
 
 main.o: main.cpp
 	$(CC) -c $(FLAGS) main.cpp
+
+RealTimeTask.o : RealTimeTask.cpp RealTimeTask.h RTT_Interface.h
+	$(CC) -c $(FLAGS) RealTimeTask.cpp
 
 ControlModel.o: ControlModel.cpp ControlModel.h
 	$(CC) -c $(FLAGS) ControlModel.cpp
