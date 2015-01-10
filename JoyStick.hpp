@@ -1,29 +1,26 @@
-
-
-/* ======================== */
 #ifndef __JOYSTICK_HPP__
 #define __JOYSTICK_HPP__
-/* ======================== */
+
+#include <string>
 
 class JoyStickDriver {
+
 private:
-  char *Device;
-  char joy_name[256];
-  int num_Axis;
+  std::string Device;
+  int DeadZone;
   int file_fd;
 
+  std::string Name;
+  int num_Axis;
+  int num_Buttons;
+
   int *buttons;
-  int numButtons;
-
   int *axis;
-  int numAxis;
-
-  int DeadZone;
 
   void ClosePort(void);
 
 public:
-  JoyStickDriver(const char *device);
+  JoyStickDriver(const std::string & device);
   ~JoyStickDriver();
 
   int Connect(void);

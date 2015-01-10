@@ -55,7 +55,7 @@ static void ReadSettings(void)
     syslog(LOG_EMERG, "JSON settings: no Joystick");
     exit(-1);
   }
-  Joy = new JoyStickDriver(name);
+  Joy = new JoyStickDriver(string(name));
 
   int deadzone = (int) json_object_get_number(settings, "Deadzone");
   if ( deadzone <= 0 ) {

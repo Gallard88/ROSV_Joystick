@@ -1,24 +1,3 @@
-/* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 4; tab-width: 4 -*- */
-/*
- * main.c
- * Copyright (C) Thomas 2012 <thomasburns88@gmail.com>
- *
-Radio_Driver is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Radio_Driver is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program.  If not, see <http://www.gnu.org/licenses/>.
-	Last change: TB 26/01/2012 9:48:49 AM
- */
-using namespace std;
-
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -31,16 +10,15 @@ using namespace std;
 
 #include "JoyStick.hpp"
 /* ======================== */
-#define NUM_AXIS	6
-#define NUM_BUT		10
+using namespace std;
 
 /* ======================== */
-JoyStickDriver::JoyStickDriver(const char *device)
+JoyStickDriver::JoyStickDriver(const string & device):
+  Device(device), DeadZone(10), file_fd(-1),
+  num_Axis(-1), num_Buttons(-1)
+
 {
-  DeadZone = 10;
-  file_fd = -1;
-  Device = new char((strlen(device)));
-  strcpy(Device, device);
+  buttons = axis = NULL;
   Connect();
 }
 
@@ -54,8 +32,8 @@ void JoyStickDriver::ClosePort(void)
 {
   delete [] axis;
   delete [] buttons;
-  numButtons = -1;
-  numAxis = -1;
+  num_Buttons = -1;
+  num_Axis = -1;
 
   if ( file_fd >= 0 ) {
     close(file_fd);
@@ -67,21 +45,33 @@ void JoyStickDriver::ClosePort(void)
 int  JoyStickDriver::Connect(void)
 {
   if ( file_fd < 0 ) {
-    file_fd = open( Device , O_RDONLY);
+    file_fd = open( Device.c_str() , O_RDONLY);
     if ( file_fd >= 0 ) {
+      char joy_name[100];
       ioctl( file_fd, JSIOCGNAME(80), &joy_name );
+      Name = string(joy_name);
+      syslog(LOG_INFO, "Joystick detected: %s\n", Name.c_str());
 
-      ioctl( file_fd, JSIOCGAXES,    &numAxis );
-      ioctl( file_fd, JSIOCGBUTTONS, &numButtons );
+      char number;
+      ioctl( file_fd, JSIOCGAXES,    &number );
+      syslog(LOG_INFO, "Axis: %d", number);
+      num_Axis = number;
 
-      axis = new int [numAxis];
-      buttons = new int [numButtons];
+      ioctl( file_fd, JSIOCGBUTTONS, &number );
+      syslog(LOG_INFO, "Buttons: %d\n", number);
+      num_Buttons = number;
 
-      memset( axis, 0, sizeof(int) * numAxis);
-      memset( buttons, 0, sizeof(int) * numButtons);
+      if ( num_Axis < 0 || num_Buttons < 0 ) {
+        syslog(LOG_INFO, "Bad info");
+        return -1;
+      }
 
-      syslog(LOG_INFO, "Joystick detected: %s\n", joy_name);
-      syslog(LOG_INFO, "Axis: %d, Buttons: %d\n", numAxis, numButtons);
+      axis = new int [num_Axis];
+      buttons = new int [num_Buttons];
+
+      memset( axis, 0, sizeof(int) * num_Axis);
+      memset( buttons, 0, sizeof(int) * num_Buttons);
+
     }
   }
   return GetFileDescript();
@@ -107,13 +97,13 @@ void JoyStickDriver::Run(void)
     if ( abs(js.value) < DeadZone ) {
       js.value = 0;
     }
-    if ( js.number < numAxis ) {
+    if ( js.number < num_Axis ) {
       axis[ js.number ] = js.value;
     }
     break;
 
   case JS_EVENT_BUTTON:
-    if ( js.number < numButtons ) {
+    if ( js.number < num_Buttons ) {
       buttons [ js.number ] = js.value;
     }
     break;
@@ -123,13 +113,13 @@ void JoyStickDriver::Run(void)
 /* ======================== */
 int JoyStickDriver::GetNumAxis(void)
 {
-  return numAxis;
+  return num_Axis;
 }
 
 /* ------------------------ */
 int JoyStickDriver::GetAxis(int axis_num)
 {
-  if ( axis_num < numAxis )
+  if ( axis_num < num_Axis )
     return axis[axis_num];
   return 0;
 }
@@ -137,13 +127,13 @@ int JoyStickDriver::GetAxis(int axis_num)
 /* ======================== */
 int JoyStickDriver::GetNumButton(void)
 {
-  return numButtons;
+  return num_Buttons;
 }
 
 /* ------------------------ */
 int JoyStickDriver::GetButton(int button_num)
 {
-  if ( button_num < numButtons )
+  if ( button_num < num_Buttons )
     return buttons [ button_num ];
   return 0;
 }
@@ -151,11 +141,7 @@ int JoyStickDriver::GetButton(int button_num)
 /* ======================== */
 void JoyStickDriver::SetDeadzone(int value)
 {
-  if ( value < 0 ) {
-    // positive numbers only!
-    value *= -1;
-  }
-  DeadZone = (37262 * value) / 100;
+  DeadZone = (37262 * abs(value)) / 100;
 }
 
 /* ======================== */
