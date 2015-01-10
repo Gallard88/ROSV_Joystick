@@ -1,6 +1,6 @@
 all: ROSV_Joystick
 
-FLAGS=-Wall -O2
+FLAGS=-Wall -O2 --pedantic
 LDADD=/usr/local/lib/libRealTime.a
 CC=g++
 
