@@ -116,16 +116,16 @@ class Main_RT: public RT_TaskMan_Interface {
 public:
   void Deadline_Missed(const std::string & name)
   {
-    syslog(LOG_EMERG, "%s: Duration Missed", name.c_str());
+    syslog(LOG_ALERT, "%s: Duration Missed", name.c_str());
   }
   void Deadline_Recovered(const std::string & name)
   {
-    syslog(LOG_EMERG, "%s: Deadline Recovered", name.c_str());
+    syslog(LOG_ALERT, "%s: Deadline Recovered", name.c_str());
   }
 
   void Duration_Overrun(const std::string & name)
   {
-    syslog(LOG_EMERG, "%s: Duration Overrun", name.c_str());
+    syslog(LOG_ALERT, "%s: Duration Overrun", name.c_str());
   }
 };
 
