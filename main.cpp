@@ -15,11 +15,13 @@ using namespace std;
 #include <syslog.h>
 #include <time.h>
 
+#include <RT_TaskManager.h>
+#include <RTT_Interface.h>
+#include <RealTimeTask.h>
+
 #include "parson.h"
 #include "JoyStick.hpp"
 #include "ControlModel.h"
-#include "RTT_Interface.h"
-#include "RealTimeTask.h"
 
 // -----------------------------
 #define UPDATE_RATE_HZ(x)	(1000000 / x)
@@ -27,6 +29,7 @@ using namespace std;
 // -----------------------------
 static JoyStickDriver *Joy;
 static ControlMode *Control;
+static RT_TaskManager TaskMan;
 
 // -----------------------------
 static void ReadSettings(void)
@@ -109,11 +112,31 @@ static void ReadData(void)
   }
 }
 
+class Main_RT: public RT_TaskMan_Interface {
+public:
+  void Deadline_Missed(const std::string & name)
+  {
+    syslog(LOG_EMERG, "%s: Duration Missed", name.c_str());
+  }
+  void Deadline_Recovered(const std::string & name)
+  {
+    syslog(LOG_EMERG, "%s: Deadline Recovered", name.c_str());
+  }
+
+  void Duration_Overrun(const std::string & name)
+  {
+    syslog(LOG_EMERG, "%s: Duration Overrun", name.c_str());
+  }
+};
+
 // -----------------------------
 int main (int argc, char *argv[])
 {
   RealTimeTask *comsTask = new RealTimeTask("Main", new MainTask());
   comsTask->SetFrequency(5);
+  comsTask->SetMaxDuration(10);
+  TaskMan.AddTask(comsTask);
+  TaskMan.AddCallback((RT_TaskMan_Interface *) new Main_RT());
 
   // open settings file and read data.
   ReadSettings();
@@ -145,10 +168,7 @@ int main (int argc, char *argv[])
       ReadData();
 
       // Read Data,  Update Model, Send new data
-      comsTask->Run();
-      if ( comsTask->DetectDeadlineEdge() ) {
-        syslog(LOG_EMERG, "%s Deadline Missed\n", comsTask->GetName().c_str());
-      }
+      TaskMan.RunTasks();
     }
     // if we get here we have either lost the joystick OR
     // We can no longer talk to the ROSV.
