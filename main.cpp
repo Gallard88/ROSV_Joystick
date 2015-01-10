@@ -1,8 +1,6 @@
-using namespace std;
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 
 #include <string>
@@ -22,6 +20,8 @@ using namespace std;
 #include "parson.h"
 #include "JoyStick.hpp"
 #include "ControlModel.h"
+
+using namespace std;
 
 // -----------------------------
 #define UPDATE_RATE_HZ(x)	(1000000 / x)
@@ -68,7 +68,7 @@ static void ReadSettings(void)
     syslog(LOG_EMERG, "JSON settings: No server selected");
     exit(-1);
   }
-  Control = new ControlMode(name, 8090);
+  Control = new ControlMode(string(name), 8090);
 }
 
 // -----------------------------
@@ -145,10 +145,10 @@ int main (int argc, char *argv[])
   syslog(LOG_NOTICE, "ROSV_Joystick online");
 
   // ------------------------------------
-  if ( daemon( 1, 0 ) < 0 ) { // keep dir
-    syslog(LOG_EMERG, "daemonise failed");
-    return -1;
-  }
+//  if ( daemon( 1, 0 ) < 0 ) { // keep dir
+//    syslog(LOG_EMERG, "daemonise failed");
+//    return -1;
+//  }
 
   // run main logic.
   while ( 1 ) {

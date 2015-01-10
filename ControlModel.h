@@ -1,6 +1,8 @@
 #ifndef __CONTROL_MODEL__
 #define __CONTROL_MODEL__
 
+#include <string>
+
 #define NUM_VECTORS 4
 
 #define VEC_FORWARD	0
@@ -12,7 +14,7 @@ class ControlMode {
 
 public:
 
-  ControlMode(const char *server, int port);
+  ControlMode(const std::string & server, int port);
   ~ControlMode();
   void Connect(void);
   void Disconnect(void);
@@ -30,9 +32,9 @@ public:
 
 private:
   int RosvFd;
-  float VectorRaw[NUM_VECTORS];
-  char *Server;
+  std::string Server;
   int Port;
+  float VectorRaw[NUM_VECTORS];
 
   void SendClientId(void);
 
