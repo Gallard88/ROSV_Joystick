@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/joystick.h>
-#include <syslog.h>
 
 #include "JoyStick.hpp"
 /* ======================== */
@@ -50,19 +49,15 @@ int  JoyStickDriver::Connect(void)
       char joy_name[100];
       ioctl( file_fd, JSIOCGNAME(80), &joy_name );
       Name = string(joy_name);
-      syslog(LOG_INFO, "Joystick detected: %s\n", Name.c_str());
 
       char number;
       ioctl( file_fd, JSIOCGAXES,    &number );
-      syslog(LOG_INFO, "Axis: %d", number);
       num_Axis = number;
 
       ioctl( file_fd, JSIOCGBUTTONS, &number );
-      syslog(LOG_INFO, "Buttons: %d\n", number);
       num_Buttons = number;
 
       if ( num_Axis < 0 || num_Buttons < 0 ) {
-        syslog(LOG_INFO, "Bad info");
         return -1;
       }
 
@@ -99,12 +94,14 @@ void JoyStickDriver::Run(void)
     }
     if ( js.number < num_Axis ) {
       axis[ js.number ] = js.value;
+//      printf("Axis: %d:%d\n", js.number, js.value);
     }
     break;
 
   case JS_EVENT_BUTTON:
     if ( js.number < num_Buttons ) {
       buttons [ js.number ] = js.value;
+//      printf("Button: %d:%d\n", js.number, js.value);
     }
     break;
   }

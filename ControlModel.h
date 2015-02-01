@@ -2,15 +2,28 @@
 #define __CONTROL_MODEL__
 
 #include <string>
+#include <RTT_Interface.h>
 
 #define NUM_VECTORS 4
 
-#define VEC_FORWARD	0
-#define VEC_STRAFE	1
-#define VEC_DEPTH		2
-#define VEC_TURN		3
+typedef enum {
 
-class ControlMode {
+  vecForward = 0,
+  vecStrafe = 1,
+  vecDepth = 2,
+  vecTurn = 3
+
+} ControlVectors;
+
+class ControlUpdate: public RTT_Interface {
+
+public:
+  virtual float GetVectorValue(ControlVectors vector) = 0;
+
+};
+
+class ControlMode: public RTT_Interface {
+
 
 public:
 
@@ -19,13 +32,11 @@ public:
   void Connect(void);
   void Disconnect(void);
 
-  void SetVectorRaw(int vec, float power);
+  void SetCallback(ControlUpdate *cb) {
+    Callback = cb;
+  }
 
-//  void IncDepthPrec(void);
-//  void DecDepthPrec(void);
-
-  void Run(void);
-  void SendVectorUpdate(void);
+  void Run_Task(void);
   int GetFD(void) {
     return RosvFd;
   }
@@ -34,9 +45,12 @@ private:
   int RosvFd;
   std::string Server;
   int Port;
-  float VectorRaw[NUM_VECTORS];
+
+  ControlUpdate *Callback;
 
   void SendClientId(void);
+  void SendVectorUpdate(void);
+  int Read_Data(void);
 
 };
 

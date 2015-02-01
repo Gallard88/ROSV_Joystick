@@ -3,12 +3,12 @@ all: ROSV_Joystick
 FLAGS=-Wall -O2 --pedantic
 LDADD=\
   /usr/local/lib/libparson.a \
-	/usr/local/lib/libRealTime.a
+  /usr/local/lib/libRealTime.a
 
 CC=g++
 
-ROSV_Joystick: $(LDADD) JoyStick.o main.o TCP_Client.o ControlModel.o
-	$(CC) $(FLAGS) -o ROSV_Joystick JoyStick.o ControlModel.o TCP_Client.o main.o $(LDADD)
+ROSV_Joystick: $(LDADD) JoyStick.o main.o ControlModel.o JMap_Xbox.o
+	$(CC) $(FLAGS) -o ROSV_Joystick JoyStick.o ControlModel.o JMap_Xbox.o main.o $(LDADD)
 
 main.o: main.cpp
 	$(CC) -c $(FLAGS) main.cpp
@@ -19,11 +19,11 @@ ControlModel.o: ControlModel.cpp ControlModel.h
 JoyStick.o: JoyStick.cpp JoyStick.hpp
 	$(CC) -c $(FLAGS) JoyStick.cpp
 
-TCP_Client.o: TCP_Client.cpp TCP_Client.hpp
-	$(CC) -c $(FLAGS) TCP_Client.cpp
+JMap_Xbox.o: JMap_Xbox.cpp JMap_Xbox.h
+	$(CC) -c $(FLAGS) JMap_Xbox.cpp
 
-style: *.cpp *.c *.h *.hpp
-	astyle -A4 -s2 *.c *.cpp *.h *.hpp
+style: *.cpp *.h *.hpp
+	astyle -A4 -s2 *.cpp *.h *.hpp
 	rm *.orig
 
 install:
@@ -31,7 +31,7 @@ install:
 	touch /var/log/ROSV_Joystick
 	install ROSV_Joystick /usr/local/bin
 	install ROSV_Joystick.sh /etc/init.d
-#	update-rc.d ROSV_Joystick.sh defaults 98 02
+	update-rc.d ROSV_Joystick.sh defaults 98 02
 	cp ROSV_Logrotate /etc/logrotate.d
 
 uninstall:

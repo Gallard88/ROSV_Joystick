@@ -21,18 +21,69 @@
 #include "JoyStick.hpp"
 #include "ControlModel.h"
 
+//
+#include "JMap_Xbox.h"
+
 using namespace std;
 
 // -----------------------------
-#define UPDATE_RATE_HZ(x)	(1000000 / x)
+const int RunRate = 10;  // Hz
 
 // -----------------------------
-static JoyStickDriver *Joy;
+static JoyStickDriver * Joy;
 static ControlMode *Control;
 static RT_TaskManager TaskMan;
+static ControlUpdate *CUpdate;
 
 // -----------------------------
-static void ReadSettings(void)
+ControlUpdate *CreateFactory(JoyStickDriver * joy)
+{
+  string name = joy->GetName();
+  if ( name == "Generic X-Box pad" ) {
+    return new JMap_Xbox(joy);
+  }
+  return NULL;
+}
+
+// -----------------------------
+static void Create_JoystickDriver(const char *name, int deadzone)
+{
+  Joy = new JoyStickDriver(string(name));
+  Joy->SetDeadzone(deadzone);
+
+  if ( Joy->Connect() < 0 ) {
+    syslog(LOG_NOTICE, "Failed to connect to joystick.");
+    exit(-1);
+  }
+
+  syslog(LOG_INFO, "Joystick: %s, A%d:B%d\n", Joy->GetName().c_str(), Joy->GetNumAxis(), Joy->GetNumButton());
+
+  CUpdate = CreateFactory(Joy);
+  if ( CUpdate == NULL ) {
+    syslog(LOG_INFO, "Joystick unrecognised");
+    exit(-1);
+  }
+
+  RealTimeTask *joyTask = new RealTimeTask("Joystick", (RTT_Interface *)CUpdate);
+  joyTask->SetFrequency(RunRate);
+  joyTask->SetMaxDuration(5);
+  TaskMan.AddTask(joyTask);
+}
+
+// -----------------------------
+void Start_Client(const char *url)
+{
+  Control = new ControlMode(string(url), 8090);
+  Control->SetCallback(CUpdate);
+
+  RealTimeTask *comsTask = new RealTimeTask("Control", (RTT_Interface *)Control);
+  comsTask->SetFrequency(RunRate);
+  comsTask->SetMaxDuration(5);
+  TaskMan.AddTask(comsTask);
+}
+
+// -----------------------------
+static void Init_System(void)
 {
   JSON_Value *val = json_parse_file("/etc/ROSV_Joystick.json");
   if ( val == NULL ) {
@@ -50,81 +101,33 @@ static void ReadSettings(void)
     syslog(LOG_EMERG, "JSON settings == NULL");
     exit( -1);
   }
+
   const char *name = json_object_get_string(settings, "Joystick");
   if ( name == NULL ) {
     syslog(LOG_EMERG, "JSON settings: no Joystick");
     exit(-1);
   }
-  Joy = new JoyStickDriver(string(name));
-
   int deadzone = (int) json_object_get_number(settings, "Deadzone");
-  if ( deadzone <= 0 ) {
-    deadzone = 5;
-  }
-  Joy->SetDeadzone(deadzone);
+  Create_JoystickDriver(name, ( deadzone <= 0 )? 5: deadzone);
 
   name = json_object_get_string(settings, "Server");
   if ( name == NULL ) {
     syslog(LOG_EMERG, "JSON settings: No server selected");
     exit(-1);
   }
-  Control = new ControlMode(string(name), 8090);
+  Start_Client(name);
 }
 
 // -----------------------------
-class MainTask: public RTT_Interface {
-
-public:
-  void Run_Task(void);
-
-};
-
-void MainTask::Run_Task(void)
-{
-  Control->SetVectorRaw(VEC_FORWARD, ((float)Joy->GetAxis(1) * -100) / 32767);
-  Control->SetVectorRaw(VEC_STRAFE, (Joy->GetAxis(0) * 100) / 32767);
-  Control->SetVectorRaw(VEC_DEPTH, ((Joy->GetAxis(3) * -1) + 32767) / 655);
-  Control->SetVectorRaw(VEC_TURN, (Joy->GetAxis(2) * 100) / 32767);
-  Control->SendVectorUpdate();
-}
-
-// -----------------------------
-static void ReadData(void)
-{
-  fd_set readFD;
-  struct timeval timeout;
-
-  timeout.tv_sec = 0;
-  timeout.tv_usec = UPDATE_RATE_HZ(10);
-
-  FD_ZERO(&readFD);
-  FD_SET(Control->GetFD(), &readFD);
-  FD_SET(Joy->GetFileDescript(), &readFD);
-  int max = (Control->GetFD() > Joy->GetFileDescript())? Control->GetFD(): Joy->GetFileDescript();
-
-  if ( select(max+1, &readFD, NULL, NULL, &timeout) > 0 ) {
-    if ( FD_ISSET(Control->GetFD(), &readFD) ) {
-      Control->Run();
-    }
-    if ( FD_ISSET(Joy->GetFileDescript(), &readFD) ) {
-      Joy->Run();
-    }
-  }
-}
-
 class Main_RT: public RT_TaskMan_Interface {
 public:
-  void Deadline_Missed(const std::string & name)
-  {
+  void Deadline_Missed(const std::string & name) {
     syslog(LOG_ALERT, "%s: Duration Missed", name.c_str());
   }
-  void Deadline_Recovered(const std::string & name)
-  {
+  void Deadline_Recovered(const std::string & name) {
     syslog(LOG_ALERT, "%s: Deadline Recovered", name.c_str());
   }
-
-  void Duration_Overrun(const std::string & name)
-  {
+  void Duration_Overrun(const std::string & name) {
     syslog(LOG_ALERT, "%s: Duration Overrun", name.c_str());
   }
 };
@@ -132,52 +135,39 @@ public:
 // -----------------------------
 int main (int argc, char *argv[])
 {
-  RealTimeTask *comsTask = new RealTimeTask("Main", new MainTask());
-  comsTask->SetFrequency(5);
-  comsTask->SetMaxDuration(10);
-  TaskMan.AddTask(comsTask);
-  TaskMan.AddCallback((RT_TaskMan_Interface *) new Main_RT());
-
-  // open settings file and read data.
-  ReadSettings();
-
   openlog("ROSV_Joystick", LOG_PID, LOG_USER);
   syslog(LOG_NOTICE, "ROSV_Joystick online");
 
+  int opt;
+
+  while ((opt = getopt(argc, argv, "dD:")) != -1) {
+    switch(opt) {
+    case 'd':
+      syslog(LOG_EMERG, "Becomming daemon");
+      if ( daemon( 1, 0 ) < 0 ) { // keep dir
+        syslog(LOG_EMERG, "daemonise failed");
+        return -1;
+      }
+      break;
+    }
+  }
   // ------------------------------------
-//  if ( daemon( 1, 0 ) < 0 ) { // keep dir
-//    syslog(LOG_EMERG, "daemonise failed");
-//    return -1;
-//  }
+  Init_System();
+  TaskMan.AddCallback((RT_TaskMan_Interface *) new Main_RT());
 
-  // run main logic.
+  // ------------------------------------
+  syslog(LOG_NOTICE, "Starting main application");
+
   while ( 1 ) {
-
-    // If NOT TCP
-    // Try to connect
-    if ( Control->GetFD() < 0 ) {
-      Control->Connect();
+    long time = TaskMan.RunTasks();
+    if ( time > 0 ) {
+      usleep(time*1000);
     }
-
-    // If not joystick
-    // Try to connect.
-    while (( Joy->GetFileDescript() >= 0 ) &&
-           ( Control->GetFD() >= 0 )) {
-
-      // read data from both.
-      ReadData();
-
-      // Read Data,  Update Model, Send new data
-      TaskMan.RunTasks();
-    }
-    // if we get here we have either lost the joystick OR
-    // We can no longer talk to the ROSV.
-    // Best option is to close the ROSV socket, and go back to polling.
-    if ( Control->GetFD() >= 0 ) {
-      syslog(LOG_NOTICE, "ROSV Connection lost");
-      Control->Disconnect();
-    }
-    sleep (120);
   }
   return 0;
 }
+
+
+
+
+

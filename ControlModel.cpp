@@ -1,19 +1,21 @@
 #include <cstdio>
 #include <cstring>
-#include <unistd.h>
+#include <cstdlib>
+#include <netdb.h>
+#include <fcntl.h>
 #include <syslog.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
 
 #include "ControlModel.h"
-#include "TCP_Client.hpp"
 
 using namespace std;
 
-#define NUM_VECTORS 4
-/*  0 Forward
- *  1 Side
- *  2 Depth
- *  3 Yaw
- */
 // -----------------------------
 static const char *VecName[NUM_VECTORS] = {
   "Forward",
@@ -26,69 +28,98 @@ static const char *VecName[NUM_VECTORS] = {
 ControlMode::ControlMode(const string & server, int port):
   RosvFd(-1), Server(server), Port(port)
 {
-  memset(VectorRaw, 0, sizeof(VectorRaw));
+  Connect();
 }
 
 ControlMode::~ControlMode()
 {
-  syslog(LOG_NOTICE, "Control Mode destructor");
   Disconnect();
 }
 
 void ControlMode::Connect(void)
 {
-  if ( RosvFd < 0 ) {
-    syslog(LOG_NOTICE, "Connect: %s:%d", Server.c_str(), Port);
-    RosvFd = connect((const char *)Server.c_str(), Port);
-    if ( RosvFd >= 0 ) {
-      syslog(LOG_NOTICE, "Connected to %s", Server.c_str());
-      SendClientId();
-    }
+  if ( RosvFd >= 0 ) {
+    return;
   }
+  struct sockaddr_in serv_addr;
+
+  if((RosvFd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    syslog(LOG_CRIT, "Error : Could not create socket");
+    exit(-1);
+  }
+
+  memset(&serv_addr, '0', sizeof(serv_addr));
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_port = htons(Port);
+
+  if(inet_pton(AF_INET, (const char *)Server.c_str(), &serv_addr.sin_addr)<=0) {
+    syslog(LOG_CRIT, "inet_pton error occured");
+    exit(-1);
+  }
+  if( connect(RosvFd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+    RosvFd = -1;
+    return ;
+  }
+  syslog(LOG_NOTICE, "Client: connected %s", Server.c_str());
+  SendClientId();
 }
 
 void ControlMode::Disconnect(void)
 {
   if ( RosvFd >= 0 ) {
-    syslog(LOG_NOTICE, "Control Mode Disconnect");
+    syslog(LOG_NOTICE, "Client: Disconnected");
     close(RosvFd);
     RosvFd = -1;
   }
 }
 
-
-void ControlMode::SetVectorRaw(int vec, float power)
+void ControlMode::Run_Task(void)
 {
-  if ( vec < NUM_VECTORS ) {
-    VectorRaw[vec] = power;
-  }
-}
+  if ( RosvFd < 0 ) {
+    Connect();
 
-//  void IncDepthPrec(void);
-//  void DecDepthPrec(void);
-
-void ControlMode::Run(void)
-{
-  char buffer[2048];
-  int  rv = read(RosvFd, buffer, sizeof(buffer));
-
-  if ( rv < 0 ) {
-    close(RosvFd);
-    RosvFd = -1;
   } else {
+    int rv;
 
-    buffer[rv] = 0; // terminate buffer
-    FILE *fp = fopen("/var/log/ROSV_Joystick", "a+");
-    if ( fp != NULL ) {
-      fwrite( buffer, 1, rv, fp);
-      fclose(fp);
-    }
+    do {
+      rv = Read_Data();
+
+    } while ( rv > 0 );
+
+    SendVectorUpdate();
   }
 }
 
 // ====================================================
+int ControlMode::Read_Data(void)
+{
+  fd_set readFD;
+  struct timeval timeout;
+  timeout.tv_sec  = 0;
+  timeout.tv_usec = 1;
+
+  FD_ZERO(&readFD);
+  FD_SET(RosvFd, &readFD);
+
+  if ( select(RosvFd+1, &readFD, NULL, NULL, &timeout) > 0 ) {
+
+    if ( FD_ISSET(RosvFd, &readFD) ) {
+      char buffer[2048];
+      int  rv = read(RosvFd, buffer, sizeof(buffer));
+
+      if ( rv <= 0 ) {
+        Disconnect();
+        return 0;
+      }
+      return 1;
+    }
+  }
+  return 0;
+}
+
+// ====================================================
 const string ClientIdInfo =
-"{ \"Packet\":\"ClientId\", \"ProtVer\":\"0.1\", \"Name\":\"ROSV_Joystick\" }\r\n";
+  "{ \"Packet\":\"ClientId\", \"ProtVer\":\"0.1\", \"Name\":\"ROSV_Joystick\" }\r\n";
 
 void ControlMode::SendClientId(void)
 {
@@ -102,16 +133,19 @@ void ControlMode::SendClientId(void)
 // ====================================================
 void ControlMode::SendVectorUpdate(void)
 {
-  int i, rv;
   char msg[256];
+
   if( RosvFd < 0 ) {
     return;
   }
-  for ( i = 0; i < NUM_VECTORS; i ++ ) {
-    sprintf(msg,"{ \"Module\":\"Navigation\", \"Packet\":\"SetVector\", \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], (float)VectorRaw[i]);
-    rv = write(RosvFd, msg, strlen(msg));
+  for ( int i = 0; i < NUM_VECTORS; i ++ ) {
+    float power = Callback->GetVectorValue((ControlVectors) i);
+
+    sprintf(msg,"{ \"Module\":\"Navigation\", \"Packet\":\"SetVector\", \"Ch\":\"%s\", \"Mode\":\"Raw\", \"Value\": %2.2f }\r\n", VecName[i], power);
+
+    int rv = write(RosvFd, msg, strlen(msg));
     if ( rv < 0 ) {
-      syslog(LOG_ALERT, "Vecotr Update Error");
+      syslog(LOG_ALERT, "Vector Update Error");
       Disconnect();
     }
   }

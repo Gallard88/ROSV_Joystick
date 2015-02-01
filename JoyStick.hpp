@@ -23,6 +23,10 @@ public:
   JoyStickDriver(const std::string & device);
   ~JoyStickDriver();
 
+  std::string GetName() {
+    return Name;
+  }
+
   int Connect(void);
   int GetFileDescript(void) {
     return file_fd;
