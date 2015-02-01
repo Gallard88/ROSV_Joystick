@@ -1,11 +1,14 @@
 all: ROSV_Joystick
 
 FLAGS=-Wall -O2 --pedantic
-LDADD=/usr/local/lib/libRealTime.a
+LDADD=\
+  /usr/local/lib/libparson.a \
+	/usr/local/lib/libRealTime.a
+
 CC=g++
 
-ROSV_Joystick: $(LDADD) JoyStick.o parson.o main.o TCP_Client.o ControlModel.o
-	$(CC) $(FLAGS) -o ROSV_Joystick JoyStick.o parson.o ControlModel.o TCP_Client.o main.o $(LDADD)
+ROSV_Joystick: $(LDADD) JoyStick.o main.o TCP_Client.o ControlModel.o
+	$(CC) $(FLAGS) -o ROSV_Joystick JoyStick.o ControlModel.o TCP_Client.o main.o $(LDADD)
 
 main.o: main.cpp
 	$(CC) -c $(FLAGS) main.cpp
@@ -16,9 +19,6 @@ ControlModel.o: ControlModel.cpp ControlModel.h
 JoyStick.o: JoyStick.cpp JoyStick.hpp
 	$(CC) -c $(FLAGS) JoyStick.cpp
 
-parson.o: parson.c parson.h
-	$(CC) -c $(FLAGS) parson.c
-
 TCP_Client.o: TCP_Client.cpp TCP_Client.hpp
 	$(CC) -c $(FLAGS) TCP_Client.cpp
 
@@ -28,13 +28,13 @@ style: *.cpp *.c *.h *.hpp
 
 install:
 	install ROSV_Joystick.json /etc
-	touch /var/log/ROSV_Joystick	
+	touch /var/log/ROSV_Joystick
 	install ROSV_Joystick /usr/local/bin
 	install ROSV_Joystick.sh /etc/init.d
 #	update-rc.d ROSV_Joystick.sh defaults 98 02
 	cp ROSV_Logrotate /etc/logrotate.d
-	
-uninstall: 
+
+uninstall:
 	rm /usr/local/bin/ROSV_Joystick
 	rm /etc/ROSV_Joystick.json
 	update-rc.d -f ROSV_Joystick.sh remove
