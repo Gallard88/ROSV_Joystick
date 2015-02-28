@@ -1,5 +1,5 @@
 {
   "Server":"192.168.4.200",
-  "Joystick":"/dev/input/js0",
+  "Joystick":"/dev/input/js1",
   "Deadzone":20
 }
