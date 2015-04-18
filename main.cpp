@@ -25,6 +25,7 @@
 #include "JMap_Xbox.h"
 
 using namespace std;
+using namespace RealTime;
 
 // -----------------------------
 const int RunRate = 10;  // Hz
@@ -64,9 +65,9 @@ static void Create_JoystickDriver(const char *name, int deadzone)
     exit(-1);
   }
 
-  RealTimeTask *joyTask = new RealTimeTask("Joystick", (RTT_Interface *)CUpdate);
+  RealTimeTask *joyTask = new RealTimeTask("Joystick", (Task_Interface *)CUpdate);
   joyTask->SetFrequency(RunRate);
-  joyTask->SetMaxDuration(5);
+  joyTask->SetMaxDuration_Ms(5);
   TaskMan.AddTask(joyTask);
 }
 
@@ -76,9 +77,9 @@ void Start_Client(const char *url)
   Control = new ControlMode(string(url), 8090);
   Control->SetCallback(CUpdate);
 
-  RealTimeTask *comsTask = new RealTimeTask("Control", (RTT_Interface *)Control);
+  RealTimeTask *comsTask = new RealTimeTask("Control", (Task_Interface *)Control);
   comsTask->SetFrequency(RunRate);
-  comsTask->SetMaxDuration(5);
+  comsTask->SetMaxDuration_Ms(5);
   TaskMan.AddTask(comsTask);
 }
 
@@ -119,7 +120,7 @@ static void Init_System(void)
 }
 
 // -----------------------------
-class Main_RT: public RT_TaskMan_Interface {
+class Main_RT: public Reporting_Interface {
 public:
   void Deadline_Missed(const std::string & name) {
     syslog(LOG_ALERT, "%s: Duration Missed", name.c_str());
@@ -130,6 +131,13 @@ public:
   void Duration_Overrun(const std::string & name) {
     syslog(LOG_ALERT, "%s: Duration Overrun", name.c_str());
   }
+  void Statistics(const std::string & name, RealTimeTask::Statistics_t stats) {
+    syslog(LOG_ALERT, "%s: Min, %u", name.c_str(), stats.Min);
+    syslog(LOG_ALERT, "%s: Max, %u", name.c_str(), stats.Max);
+    syslog(LOG_ALERT, "%s: Avg, %u", name.c_str(), stats.Avg);
+    syslog(LOG_ALERT, "%s: Called, %u", name.c_str(), stats.Called);
+  }
+
 };
 
 // -----------------------------
@@ -153,7 +161,7 @@ int main (int argc, char *argv[])
   }
   // ------------------------------------
   Init_System();
-  TaskMan.AddCallback((RT_TaskMan_Interface *) new Main_RT());
+  TaskMan.AddCallback((Reporting_Interface *) new Main_RT());
 
   // ------------------------------------
   syslog(LOG_NOTICE, "Starting main application");

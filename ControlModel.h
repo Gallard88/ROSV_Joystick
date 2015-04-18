@@ -15,14 +15,14 @@ typedef enum {
 
 } ControlVectors;
 
-class ControlUpdate: public RTT_Interface {
+class ControlUpdate: public RealTime::Task_Interface {
 
 public:
   virtual float GetVectorValue(ControlVectors vector) = 0;
 
 };
 
-class ControlMode: public RTT_Interface {
+class ControlMode: public RealTime::Task_Interface {
 
 
 public:

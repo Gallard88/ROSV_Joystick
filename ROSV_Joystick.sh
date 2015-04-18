@@ -10,7 +10,8 @@
 start() {
   # Start TFTP Server
   echo "ROSV_Joystick: Start"
-  /usr/local/bin/ROSV_Joystick
+  /usr/local/bin/ROSV_Joystick -d
+  renice -n -5 $(pgrep ROSV_Joystick)
 }
 
 stop() {
